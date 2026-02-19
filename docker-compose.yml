@@ -1,0 +1,25 @@
+services:
+  web:
+    container_name: viabrasil-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps
+
+      # HOWEVER, to use the multi-stage properly for dev:
+      # We usually just use a simple node image for dev to keep it simple and mount everything.
+    image: node:20-alpine
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    command: npm run dev -- --webpack
+
+    # command: sh -c "npm install && npm run dev" # Use this if you want auto-install, but slightly slower startup

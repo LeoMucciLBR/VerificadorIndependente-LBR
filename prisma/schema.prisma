@@ -1,0 +1,819 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Instituicao {
+  id               BigInt   @id @default(autoincrement())
+  uuid             String   @unique(map: "uuid") @db.Char(36)
+  nome             String   @db.VarChar(255)
+  nomeResponsavel  String   @db.VarChar(255)
+  emailResponsavel String   @db.VarChar(255)
+  createdAt        DateTime @default(now()) @db.DateTime(0)
+  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+  users            User[]
+
+  @@index([nome], map: "ix_instituicoes_nome")
+  @@map("instituicoes")
+}
+
+model User {
+  id                     BigInt                @id @default(autoincrement())
+  uuid                   String                @unique(map: "uuid") @db.Char(36)
+  instituicaoId          BigInt?               @map("instituicao_id")
+  email                  String                @unique(map: "email") @db.VarChar(255)
+  name                   String?               @db.VarChar(255)
+  passwordHash           String                @db.VarChar(255)
+  role                   users_role            @default(USER)
+  isActive               Boolean               @default(true)
+  isVerified             Boolean               @default(false)
+  failedLoginAttempts    Int                   @default(0)
+  lockoutUntil           DateTime?             @db.DateTime(0)
+  lastLoginAt            DateTime?             @db.DateTime(0)
+  lastPasswordChange     DateTime              @default(now()) @db.DateTime(0)
+  mfaEnabled             Boolean               @default(false)
+  mfaSecretEnc           String?               @db.VarChar(255)
+  podeCadastrar          Boolean               @default(false)
+  avatar                 String?               @db.VarChar(1024)
+  createdAt              DateTime              @default(now()) @db.DateTime(0)
+  updatedAt              DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  audit_logs             AuditLog[]
+  fases                  Fase[]
+  formulas               Formula[]
+  inspecoes              Inspecao[]
+  inspecoes_responsaveis InspecaoResponsavel[]
+  medicoes               Medicao[]
+  project_info           ProjectInfo[]
+  sessions               Session[]
+  user_permissions       UserPermission[]
+  user_projects          user_projects[]
+  instituicao            Instituicao?          @relation(fields: [instituicaoId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_users_instituicao")
+
+  @@index([instituicaoId], map: "ix_users_instituicao")
+  @@map("users")
+}
+
+model Session {
+  id           BigInt   @id @default(autoincrement())
+  userId       BigInt   @map("user_id")
+  tokenHash    String   @unique(map: "tokenHash") @db.Char(64)
+  ipAddress    String?  @db.VarChar(45)
+  userAgent    String?  @db.VarChar(255)
+  isValid      Boolean  @default(true)
+  expiresAt    DateTime @db.DateTime(0)
+  createdAt    DateTime @default(now()) @db.DateTime(0)
+  lastActiveAt DateTime @default(now()) @db.DateTime(0)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sessions_user")
+
+  @@index([userId], map: "ix_sessions_user")
+  @@map("sessions")
+}
+
+model AuditLog {
+  id            BigInt                @id @default(autoincrement())
+  action        audit_logs_action
+  severity      audit_logs_severity   @default(INFO)
+  actor_user_id BigInt?
+  actorEmail    String?               @db.VarChar(255)
+  actorRole     audit_logs_actorRole?
+  resource      String                @db.VarChar(80)
+  resourceId    String?               @db.VarChar(80)
+  details       Json?
+  ipAddress     String?               @db.VarChar(45)
+  userAgent     String?               @db.VarChar(255)
+  createdAt     DateTime              @default(now()) @db.DateTime(0)
+  users         User?                 @relation(fields: [actor_user_id], references: [id], onUpdate: Restrict, map: "fk_audit_actor")
+
+  @@index([actor_user_id], map: "ix_audit_actor")
+  @@map("audit_logs")
+}
+
+model UserPermission {
+  id        BigInt                     @id @default(autoincrement())
+  user_id   BigInt
+  tableName user_permissions_tableName
+  canCreate Boolean                    @default(false)
+  canRead   Boolean                    @default(false)
+  canUpdate Boolean                    @default(false)
+  canDelete Boolean                    @default(false)
+  createdAt DateTime                   @default(now()) @db.DateTime(0)
+  updatedAt DateTime                   @default(now()) @updatedAt @db.DateTime(0)
+  users     User                       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_user_permissions_user")
+
+  @@unique([user_id, tableName], map: "uq_user_permissions")
+  @@index([user_id], map: "ix_user_permissions_user")
+  @@map("user_permissions")
+}
+
+model ProjectInfo {
+  id                BigInt    @id @default(autoincrement())
+  project_id        BigInt?
+  title             String    @default("Meu Projeto") @db.VarChar(255)
+  heroImageUrl      String?   @db.VarChar(1024)
+  contractNumber    String?   @db.VarChar(80)
+  clientName        String?   @db.VarChar(255)
+  segmentName       String?   @db.VarChar(255)
+  extension         String?   @db.VarChar(80)
+  startDate         DateTime? @db.DateTime(0)
+  endDate           DateTime? @db.DateTime(0)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  updatedBy_user_id BigInt?
+  projects          projects? @relation(fields: [project_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_project_info_project")
+  users             User?     @relation(fields: [updatedBy_user_id], references: [id], onUpdate: Restrict, map: "fk_project_info_updatedBy")
+
+  @@index([updatedBy_user_id], map: "ix_project_info_updatedBy")
+  @@index([project_id], map: "ix_project_info_project")
+  @@map("project_info")
+}
+
+model Fase {
+  id                    BigInt               @id @default(autoincrement())
+  uuid                  String               @unique(map: "uuid") @db.Char(36)
+  nome                  String               @db.VarChar(255)
+  dataInicio            DateTime             @db.DateTime(0)
+  dataFim               DateTime             @db.DateTime(0)
+  criadoPor_user_id     BigInt
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now()) @db.DateTime(0)
+  updatedAt             DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  project_id            BigInt?
+  caracterizacoes_fases CaracterizacaoFase[]
+  dashboard_cards       DashboardCard[]
+  users                 User                 @relation(fields: [criadoPor_user_id], references: [id], onUpdate: Restrict, map: "fk_fases_criadoPor")
+  projects              projects?            @relation(fields: [project_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_fases_project")
+  formulas_fases        FormulaFase[]
+  inspecoes             Inspecao[]
+  medicoes              Medicao[]
+
+  @@index([dataInicio, dataFim], map: "ix_fases_periodo")
+  @@index([isActive], map: "ix_fases_isActive")
+  @@index([criadoPor_user_id], map: "ix_fases_criadoPor")
+  @@index([project_id], map: "fk_fases_project")
+  @@map("fases")
+}
+
+model Grupo {
+  id           BigInt      @id @default(autoincrement())
+  uuid         String      @unique(map: "uuid") @db.Char(36)
+  nome         String      @db.VarChar(255)
+  sigla        String      @unique(map: "sigla") @db.VarChar(50)
+  peso         Decimal     @default(1.0000) @db.Decimal(10, 4)
+  grupoPai_id  BigInt?
+  createdAt    DateTime    @default(now()) @db.DateTime(0)
+  updatedAt    DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  project_id   BigInt?
+  formulas     Formula[]
+  grupos       Grupo?      @relation("gruposTogrupos", fields: [grupoPai_id], references: [id], onUpdate: Restrict, map: "fk_grupos_pai")
+  other_grupos Grupo[]     @relation("gruposTogrupos")
+  projects     projects?   @relation(fields: [project_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_grupos_project")
+  indicadores  Indicador[]
+
+  @@index([grupoPai_id], map: "ix_grupos_pai")
+  @@index([project_id], map: "fk_grupos_project")
+  @@map("grupos")
+}
+
+model Indicador {
+  id                   BigInt                  @id @default(autoincrement())
+  uuid                 String                  @unique(map: "uuid") @db.Char(36)
+  nome                 String                  @db.VarChar(255)
+  descricao            String                  @db.Text
+  sigla                String                  @unique(map: "sigla") @db.VarChar(50)
+  unidadeMedida        String                  @db.VarChar(80)
+  areaAtuacao          indicadores_areaAtuacao
+  grupo_id             BigInt
+  createdAt            DateTime                @default(now()) @db.DateTime(0)
+  updatedAt            DateTime                @default(now()) @updatedAt @db.DateTime(0)
+  requer_medicao       Boolean?                @default(false)
+  valor_meta           Decimal?                @db.Decimal(10, 2)
+  caracterizacoes      Caracterizacao[]
+  configuracao_calculo configuracao_calculo[]
+  grupos               Grupo                   @relation(fields: [grupo_id], references: [id], onUpdate: Restrict, map: "fk_indicadores_grupo")
+  medicoes             Medicao[]
+  ocorrencias          Ocorrencia[]
+
+  @@index([grupo_id], map: "ix_indicadores_grupo")
+  @@index([areaAtuacao], map: "ix_indicadores_area")
+  @@map("indicadores")
+}
+
+model Caracterizacao {
+  id                    BigInt                      @id @default(autoincrement())
+  uuid                  String                      @unique(map: "uuid") @db.Char(36)
+  descricao             String                      @db.Text
+  regulamentacao        String?                     @db.Text
+  tipoRetorno           caracterizacoes_tipoRetorno
+  indicador_id          BigInt
+  createdAt             DateTime                    @default(now()) @db.DateTime(0)
+  updatedAt             DateTime                    @default(now()) @updatedAt @db.DateTime(0)
+  indicadores           Indicador                   @relation(fields: [indicador_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_caracterizacoes_indicador")
+  caracterizacoes_fases CaracterizacaoFase[]
+
+  @@index([indicador_id], map: "ix_caracterizacoes_indicador")
+  @@map("caracterizacoes")
+}
+
+model CaracterizacaoFase {
+  caracterizacao_id BigInt
+  fase_id           BigInt
+  caracterizacoes   Caracterizacao @relation(fields: [caracterizacao_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cf_caracterizacao")
+  fases             Fase           @relation(fields: [fase_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cf_fase")
+
+  @@id([caracterizacao_id, fase_id])
+  @@index([fase_id], map: "ix_cf_fase")
+  @@map("caracterizacoes_fases")
+}
+
+model Constante {
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique(map: "uuid") @db.Char(36)
+  nome      String   @unique(map: "nome") @db.VarChar(255)
+  valor     Decimal  @db.Decimal(18, 6)
+  createdAt DateTime @default(now()) @db.DateTime(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("constantes")
+}
+
+model Variavel {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique(map: "uuid") @db.Char(36)
+  nome        String   @unique(map: "nome") @db.VarChar(255)
+  valorPadrao Decimal  @db.Decimal(18, 6)
+  createdAt   DateTime @default(now()) @db.DateTime(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@map("variaveis")
+}
+
+model Formula {
+  id                  BigInt        @id @default(autoincrement())
+  uuid                String        @unique(map: "uuid") @db.Char(36)
+  nome                String        @db.VarChar(255)
+  descricao           String        @db.Text
+  expressao           String        @db.Text
+  isPrincipal         Boolean       @default(false)
+  exigeGeolocalizacao Boolean       @default(false)
+  exigePeriodo        Boolean       @default(false)
+  grupo_id            BigInt
+  criadoPor_user_id   BigInt
+  createdAt           DateTime      @default(now()) @db.DateTime(0)
+  updatedAt           DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  users               User          @relation(fields: [criadoPor_user_id], references: [id], onUpdate: Restrict, map: "fk_formulas_criadoPor")
+  grupos              Grupo         @relation(fields: [grupo_id], references: [id], onUpdate: Restrict, map: "fk_formulas_grupo")
+  formulas_fases      FormulaFase[]
+
+  @@index([grupo_id], map: "ix_formulas_grupo")
+  @@index([isPrincipal], map: "ix_formulas_isPrincipal")
+  @@index([nome], map: "ix_formulas_nome")
+  @@index([criadoPor_user_id], map: "ix_formulas_criadoPor")
+  @@map("formulas")
+}
+
+model FormulaFase {
+  formula_id BigInt
+  fase_id    BigInt
+  fases      Fase    @relation(fields: [fase_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ff_fase")
+  formulas   Formula @relation(fields: [formula_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ff_formula")
+
+  @@id([formula_id, fase_id])
+  @@index([fase_id], map: "ix_ff_fase")
+  @@map("formulas_fases")
+}
+
+model Medicao {
+  id                BigInt          @id @default(autoincrement())
+  uuid              String          @unique(map: "uuid") @db.Char(36)
+  competencia       DateTime        @db.Date
+  indicador_id      BigInt
+  fase_id           BigInt
+  valor             Float
+  observacoes       String?         @db.VarChar(1024)
+  status            medicoes_status @default(ABERTO)
+  criadoEm          DateTime        @default(now()) @db.DateTime(0)
+  atualizadoEm      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  criadoPor_user_id BigInt
+  users             User            @relation(fields: [criadoPor_user_id], references: [id], onUpdate: Restrict, map: "fk_medicoes_criadoPor")
+  fases             Fase            @relation(fields: [fase_id], references: [id], onUpdate: Restrict, map: "fk_medicoes_fase")
+  indicadores       Indicador       @relation(fields: [indicador_id], references: [id], onUpdate: Restrict, map: "fk_medicoes_indicador")
+
+  @@unique([competencia, indicador_id, fase_id], map: "uq_medicoes_comp_ind_fase")
+  @@index([competencia], map: "ix_medicoes_competencia")
+  @@index([fase_id], map: "ix_medicoes_fase")
+  @@index([criadoPor_user_id], map: "fk_medicoes_criadoPor")
+  @@index([indicador_id], map: "fk_medicoes_indicador")
+  @@map("medicoes")
+}
+
+model DashboardCard {
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique(map: "uuid") @db.Char(36)
+  period    String   @db.VarChar(80)
+  dateLabel String   @map("dateLabel") @db.VarChar(40)
+  score     Float
+  fase_id   BigInt?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.DateTime(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.DateTime(0)
+  fases     Fase?    @relation(fields: [fase_id], references: [id], onUpdate: Restrict, map: "fk_dashboard_fase")
+
+  @@index([sortOrder], map: "ix_dashboard_order")
+  @@index([fase_id], map: "ix_dashboard_fase")
+  @@map("dashboard_cards")
+}
+
+model Rodovia {
+  id                   BigInt              @id @default(autoincrement())
+  uuid                 String              @unique(map: "uuid") @db.Char(36)
+  nome                 String              @db.VarChar(255)
+  codigo               String?             @db.VarChar(80)
+  concessionaria       String?             @db.VarChar(255)
+  kmlUrl               String?             @db.VarChar(1024)
+  shpUrl               String?             @db.VarChar(1024)
+  metadata             Json?
+  createdAt            DateTime            @default(now()) @db.DateTime(0)
+  updatedAt            DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  extensao             Decimal?            @default(0.000) @db.Decimal(10, 3)
+  project_id           BigInt?
+  geojson              Json?
+  inspecoes            Inspecao[]
+  marcos_quilometricos MarcoQuilometrico[]
+  notas_mensais        notas_mensais[]
+  project_rodovias     project_rodovias[]
+  rodovia_faixas_km    rodovia_faixas_km[]
+  projects             projects?           @relation(fields: [project_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_rodovias_project")
+  segmentos            Segmento[]
+  segmentos_homogeneos SegmentoHomogeneo[]
+
+  @@index([project_id], map: "fk_rodovias_project")
+  @@map("rodovias")
+}
+
+model Segmento {
+  id         BigInt   @id @default(autoincrement())
+  uuid       String   @unique(map: "uuid") @db.Char(36)
+  rodovia_id BigInt
+  kmInicial  Decimal  @db.Decimal(10, 3)
+  kmFinal    Decimal  @db.Decimal(10, 3)
+  descricao  String?  @db.VarChar(255)
+  municipio  String?  @db.VarChar(255)
+  bairro     String?  @db.VarChar(255)
+  geocodigo  String?  @db.VarChar(40)
+  geojson    Json?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @db.DateTime(0)
+  updatedAt  DateTime @default(now()) @updatedAt @db.DateTime(0)
+  rodovias   Rodovia  @relation(fields: [rodovia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_segmentos_rodovia")
+
+  @@index([rodovia_id], map: "ix_segmentos_rodovia")
+  @@index([rodovia_id, kmInicial, kmFinal], map: "ix_segmentos_km")
+  @@index([municipio], map: "ix_segmentos_municipio")
+  @@map("segmentos")
+}
+
+model SegmentoHomogeneo {
+  id                        BigInt                  @id @default(autoincrement())
+  uuid                      String                  @unique(map: "uuid") @db.Char(36)
+  rodovia_id                BigInt
+  nome                      String                  @db.VarChar(255)
+  descricao                 String?                 @db.Text
+  geom                      Unsupported("geometry")
+  kmInicial                 Decimal                 @db.Decimal(10, 3)
+  kmFinal                   Decimal                 @db.Decimal(10, 3)
+  inicioTrecho              String?                 @db.VarChar(255)
+  fimTrecho                 String?                 @db.VarChar(255)
+  areaTotalM2               Int?
+  faixaAdicionalOuDuplicado Int                     @default(0)
+  peso                      Decimal                 @db.Decimal(18, 15)
+  quantMinimaPlacasM2       Decimal?                @db.Decimal(18, 4)
+  totalPlacasM2             Decimal?                @db.Decimal(18, 4)
+  createdAt                 DateTime                @default(now()) @db.DateTime(0)
+  updatedAt                 DateTime                @default(now()) @updatedAt @db.DateTime(0)
+  peso_nota_final           Decimal?                @db.Decimal(10, 8)
+  kmzUrl                    String?                 @db.VarChar(1024)
+  geojson                   Json?
+  kmInicialKML              Decimal?                @db.Decimal(10, 3)
+  kmFinalKML                Decimal?                @db.Decimal(10, 3)
+  notas_mensais             notas_mensais[]
+  ocorrencias_trechos       OcorrenciaTrecho[]
+  rodovias                  Rodovia                 @relation(fields: [rodovia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sh_rodovia")
+
+  @@unique([rodovia_id, nome], map: "uq_sh_rodovia_nome")
+  @@unique([rodovia_id, kmInicial, kmFinal], map: "uq_sh_rodovia_km")
+  @@index([rodovia_id, kmInicial, kmFinal], map: "ix_sh_rodovia_km")
+  @@index([geom(length: 32)], map: "sx_sh_geom")
+  @@map("segmentos_homogeneos")
+}
+
+model Inspecao {
+  id                     BigInt                @id @default(autoincrement())
+  uuid                   String                @unique(map: "uuid") @db.Char(36)
+  rodovia_id             BigInt
+  usuario_id             BigInt
+  periodoReferencia      DateTime              @db.Date
+  dataInicioVistoria     DateTime              @db.DateTime(0)
+  dataFimVistoria        DateTime              @db.DateTime(0)
+  descricaoVistoria      String?               @db.Text
+  sincronizado           Boolean               @default(false)
+  createdAt              DateTime              @default(now()) @db.DateTime(0)
+  updatedAt              DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  fase_id                BigInt?
+  is_official            Boolean               @default(false)
+  status                 String                @default("Pendente") @db.VarChar(50)
+  nota                   Decimal?              @db.Decimal(5, 2)
+  assinatura_caminho     String?               @db.VarChar(1024)
+  fase                   Fase?                 @relation(fields: [fase_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_inspecoes_fase")
+  rodovias               Rodovia               @relation(fields: [rodovia_id], references: [id], onUpdate: Restrict, map: "fk_inspecoes_rodovia")
+  users                  User                  @relation(fields: [usuario_id], references: [id], onUpdate: Restrict, map: "fk_inspecoes_usuario")
+  inspecoes_responsaveis InspecaoResponsavel[]
+  inspection_locations   InspectionLocation[]
+  ocorrencias            Ocorrencia[]
+
+  @@index([rodovia_id], map: "ix_inspecoes_rodovia")
+  @@index([usuario_id], map: "ix_inspecoes_usuario")
+  @@index([fase_id], map: "ix_inspecoes_fase")
+  @@map("inspecoes")
+}
+
+model InspecaoResponsavel {
+  inspecao_id BigInt
+  user_id     BigInt
+  papel       String?  @db.VarChar(80)
+  inspecoes   Inspecao @relation(fields: [inspecao_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ir_inspecao")
+  users       User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ir_user")
+
+  @@id([inspecao_id, user_id])
+  @@index([user_id], map: "ix_ir_user")
+  @@map("inspecoes_responsaveis")
+}
+
+model Ocorrencia {
+  id                  BigInt                         @id @default(autoincrement())
+  uuid                String                         @unique(map: "uuid") @db.Char(36)
+  inspecao_id         BigInt
+  indicador_id        BigInt?
+  grupo_id            BigInt?
+  registroReferenteA  ocorrencias_registroReferenteA
+  dataHoraOcorrencia  DateTime                       @db.DateTime(0)
+  lado                ocorrencias_lado
+  pistaFaixa          ocorrencias_pistaFaixa
+  anotacoes           String?                        @db.Text
+  status              ocorrencias_status             @default(ABERTA)
+  createdAt           DateTime                       @default(now()) @db.DateTime(0)
+  updatedAt           DateTime                       @default(now()) @updatedAt @db.DateTime(0)
+  valor_medido        Decimal?                       @db.Decimal(10, 3)
+  unidade_medida      String?                        @db.VarChar(20)
+  dentro_do_limite    Boolean?
+  inspecoes           Inspecao                       @relation(fields: [inspecao_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_oc_inspecao")
+  indicadores         Indicador?                     @relation(fields: [indicador_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_ocorrencias_indicador")
+  ocorrencias_fotos   OcorrenciaFoto[]
+  ocorrencias_trechos OcorrenciaTrecho[]
+
+  @@index([inspecao_id], map: "ix_oc_inspecao")
+  // @@index([dentro_do_limite], map: "ix_ocorrencias_limite")
+  @@index([indicador_id], map: "fk_ocorrencias_indicador")
+  @@map("ocorrencias")
+}
+
+model OcorrenciaTrecho {
+  id                   BigInt            @id @default(autoincrement())
+  uuid                 String            @unique(map: "uuid") @db.Char(36)
+  ocorrencia_id        BigInt
+  segmentoHomogeneo_id BigInt
+  kmInicial            Decimal           @db.Decimal(10, 3)
+  kmFinal              Decimal?          @db.Decimal(10, 3)
+  ordem                Int
+  ocorrencias          Ocorrencia        @relation(fields: [ocorrencia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ot_ocorrencia")
+  segmentos_homogeneos SegmentoHomogeneo @relation(fields: [segmentoHomogeneo_id], references: [id], onUpdate: Restrict, map: "fk_ot_segmento")
+
+  @@unique([ocorrencia_id, ordem], map: "uq_ot_ocorrencia_ordem")
+  @@index([ocorrencia_id], map: "ix_ot_ocorrencia")
+  @@index([segmentoHomogeneo_id], map: "ix_ot_segmento")
+  @@index([segmentoHomogeneo_id, kmInicial, kmFinal], map: "ix_ot_segmento_km")
+  @@map("ocorrencias_trechos")
+}
+
+model OcorrenciaFoto {
+  id             BigInt     @id @default(autoincrement())
+  uuid           String     @unique(map: "uuid") @db.Char(36)
+  ocorrencia_id  BigInt
+  caminhoArquivo String     @db.VarChar(1024)
+  latitude       Decimal?   @db.Decimal(10, 8)
+  longitude      Decimal?   @db.Decimal(11, 8)
+  dataHoraFoto   DateTime   @db.DateTime(0)
+  ordem          Int        @default(0)
+  createdAt      DateTime   @default(now()) @db.DateTime(0)
+  ocorrencias    Ocorrencia @relation(fields: [ocorrencia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_of_ocorrencia")
+
+  @@index([ocorrencia_id], map: "ix_of_ocorrencia")
+  @@map("ocorrencias_fotos")
+}
+
+model HighwayRoute {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique(map: "uuid") @db.Char(36)
+  projectName String?  @db.VarChar(255)
+  routeName   String   @db.VarChar(255)
+  description String?  @db.Text
+  geojson     Json
+  lengthKm    Decimal? @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @db.DateTime(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([routeName], map: "ix_highway_routes_routeName")
+  @@map("highway_routes")
+}
+
+model InspectionLocation {
+  id                BigInt    @id @default(autoincrement())
+  uuid              String    @unique(map: "uuid") @db.Char(36)
+  inspecao_id       BigInt?
+  latitude          Decimal   @db.Decimal(10, 8)
+  longitude         Decimal   @db.Decimal(11, 8)
+  accuracy          Decimal?  @db.Decimal(10, 2)
+  timestamp         DateTime  @default(now()) @db.DateTime(0)
+  distanceFromRoute Decimal?  @db.Decimal(10, 2)
+  properties        Json?
+  inspecoes         Inspecao? @relation(fields: [inspecao_id], references: [id], onUpdate: Restrict, map: "fk_il_inspecao")
+
+  @@index([inspecao_id], map: "ix_il_inspecao")
+  @@index([timestamp], map: "ix_il_timestamp")
+  @@map("inspection_locations")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model configuracao_calculo {
+  id              BigInt                                @id @default(autoincrement())
+  indicador_id    BigInt
+  fase_contrato   configuracao_calculo_fase_contrato    @default(RECUPERACAO)
+  valor_meta      Decimal?                              @db.Decimal(10, 2)
+  operador_logico configuracao_calculo_operador_logico? @default(MENOR_OU_IGUAL)
+  peso_percentual Decimal?                              @db.Decimal(5, 2)
+  ativo           Boolean?                              @default(true)
+  createdAt       DateTime?                             @default(now()) @db.DateTime(0)
+  updatedAt       DateTime?                             @default(now()) @db.DateTime(0)
+  indicadores     Indicador                             @relation(fields: [indicador_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_conf_calc_indicadores")
+
+  @@index([indicador_id], map: "fk_conf_calc_indicadores")
+}
+
+model notas_mensais {
+  id                   BigInt            @id @default(autoincrement())
+  mes_referencia       DateTime          @db.Date
+  rodovia_id           BigInt
+  segmento_id          BigInt
+  nota_calculada       Decimal?          @db.Decimal(5, 2)
+  nota_ponderada       Decimal?          @db.Decimal(10, 8)
+  calculado_em         DateTime?         @default(now()) @db.DateTime(0)
+  rodovias             Rodovia           @relation(fields: [rodovia_id], references: [id], onUpdate: Restrict, map: "notas_mensais_ibfk_1")
+  segmentos_homogeneos SegmentoHomogeneo @relation(fields: [segmento_id], references: [id], onUpdate: Restrict, map: "notas_mensais_ibfk_2")
+
+  @@unique([mes_referencia, segmento_id], map: "uk_nota_mes_segmento")
+  @@index([rodovia_id], map: "fk_notas_mensais_rodovia")
+  @@index([segmento_id], map: "fk_notas_mensais_segmento")
+}
+
+model MarcoQuilometrico {
+  id              BigInt   @id @default(autoincrement())
+  uuid            String   @unique(map: "uuid") @db.Char(36)
+  rodovia_id      BigInt
+  nome            String   @db.VarChar(255)
+  km              Decimal  @db.Decimal(10, 3)
+  latitude        Decimal  @db.Decimal(10, 8)
+  longitude       Decimal  @db.Decimal(11, 8)
+  geoJson         Json?
+  createdAt       DateTime @default(now()) @db.DateTime(0)
+  updatedAt       DateTime @default(now()) @updatedAt @db.DateTime(0)
+  segmento_origem String?  @db.VarChar(255)
+  rodovias        Rodovia  @relation(fields: [rodovia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_marcos_rodovia")
+
+  @@index([rodovia_id], map: "ix_marcos_rodovia")
+  @@index([km], map: "ix_marcos_km")
+  @@map("marcos_quilometricos")
+}
+
+model projects {
+  id               BigInt             @id @default(autoincrement())
+  uuid             String             @unique(map: "uuid") @db.Char(36)
+  codigo           String             @unique(map: "codigo") @db.VarChar(50)
+  nome             String             @db.VarChar(255)
+  slug             String?            @unique(map: "ix_projects_slug") @db.VarChar(100)
+  descricao        String?            @db.Text
+  ativo            Boolean            @default(true)
+  createdAt        DateTime?          @default(now()) @db.DateTime(0)
+  updatedAt        DateTime?          @default(now()) @db.DateTime(0)
+  kmzUrl           String?            @db.VarChar(1024)
+  geojson          Json?
+  fases            Fase[]
+  grupos           Grupo[]
+  project_info     ProjectInfo[]
+  project_rodovias project_rodovias[]
+  rodovias         Rodovia[]
+  user_projects    user_projects[]
+}
+
+model user_projects {
+  user_id    BigInt
+  project_id BigInt
+  papel      user_projects_papel? @default(FISCAL)
+  ativo      Boolean?             @default(true)
+  projects   projects             @relation(fields: [project_id], references: [id], onUpdate: Restrict, map: "fk_up_project")
+  users      User                 @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_up_user")
+
+  @@id([user_id, project_id])
+  @@index([project_id], map: "fk_up_project")
+}
+
+model project_rodovias {
+  project_id BigInt
+  rodovia_id BigInt
+  ativo      Boolean  @default(true)
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pr_project")
+  rodovias   Rodovia  @relation(fields: [rodovia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pr_rodovia")
+
+  @@id([project_id, rodovia_id])
+  @@index([rodovia_id], map: "fk_pr_rodovia")
+}
+
+model numeros {
+  n Int @id
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model rodovia_faixas_km {
+  id         BigInt    @id @default(autoincrement())
+  uuid       String    @unique(map: "uuid") @db.Char(36)
+  rodovia_id BigInt
+  kmInicial  Decimal   @db.Decimal(10, 3)
+  kmFinal    Decimal   @db.Decimal(10, 3)
+  passo      Decimal   @db.Decimal(6, 3)
+  createdAt  DateTime? @default(now()) @db.DateTime(0)
+  rodovias   Rodovia   @relation(fields: [rodovia_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_faixa_rodovia")
+
+  @@unique([rodovia_id, kmInicial, kmFinal], map: "uq_faixa_rodovia_km")
+}
+
+enum audit_logs_action {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  VIEW
+  SYSTEM_ALERT
+}
+
+enum audit_logs_severity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum configuracao_calculo_fase_contrato {
+  TRABALHOS_INICIAIS
+  RECUPERACAO
+  CONSERVACAO
+}
+
+enum user_permissions_tableName {
+  FASE
+  GRUPO
+  INDICADOR
+  CARACTERIZACAO
+  CONSTANTE
+  VARIAVEL
+  INSTITUICAO
+  USER
+  FORMULA
+}
+
+enum ocorrencias_registroReferenteA {
+  Indicadores_de_desempenho @map("Indicadores de desempenho")
+  anota__es_de_campo        @map("anotações de campo")
+}
+
+enum caracterizacoes_tipoRetorno {
+  NUMERICO
+  PERCENTUAL
+  BOOLEANO
+  TEXTO
+}
+
+enum configuracao_calculo_operador_logico {
+  MENOR_QUE      @map("<")
+  MENOR_OU_IGUAL @map("<=")
+  MAIOR_QUE      @map(">")
+  MAIOR_OU_IGUAL @map(">=")
+  IGUAL          @map("=")
+}
+
+enum audit_logs_actorRole {
+  SUPER_ADMIN
+  ADMIN
+  AUDITOR
+  USER
+}
+
+enum ocorrencias_lado {
+  Esquerdo
+  direito
+  ambos
+}
+
+enum indicadores_areaAtuacao {
+  INFRAESTRUTURA
+  MEIO_AMBIENTE
+  SOCIAL
+  ECONOMICO
+  GESTAO
+  QUALIDADE
+}
+
+enum ocorrencias_pistaFaixa {
+  FT01
+  FT01_FT02 @map("FT01/FT02")
+  FT02
+  FD
+  AC
+  CC
+}
+
+enum users_role {
+  SUPER_ADMIN
+  ADMIN
+  AUDITOR
+  USER
+}
+
+enum medicoes_status {
+  ABERTO
+  FECHADO
+  APROVADO
+}
+
+enum ocorrencias_status {
+  ABERTA
+  CRITICA
+  ENCERRADA
+}
+
+enum user_projects_papel {
+  ADMIN
+  FISCAL
+  CONSULTA
+}
+
+// =====================================================
+// TABELAS TEMPORÁRIAS PARA TESTES DE GEOJSON
+// =====================================================
+
+model RodoviaTemp {
+  id               BigInt   @id @default(autoincrement())
+  uuid             String   @unique(map: "uuid") @db.Char(36)
+  nome             String   @db.VarChar(255)
+  codigo           String?  @db.VarChar(80)
+  extensao         Decimal? @default(0.000) @db.Decimal(10, 3)
+  geojson_trace    Json?    @map("geojson_trace")
+  geojson_markers  Json?    @map("geojson_markers")
+  metadata         Json?
+  createdAt        DateTime @default(now()) @db.DateTime(0)
+  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+  
+  segmentos        SegmentoHomogeneoTemp[]
+
+  @@index([nome], map: "ix_rodovias_temp_nome")
+  @@index([codigo], map: "ix_rodovias_temp_codigo")
+  @@map("rodovias_temp")
+}
+
+model SegmentoHomogeneoTemp {
+  id                        BigInt       @id @default(autoincrement())
+  uuid                      String       @unique(map: "uuid") @db.Char(36)
+  rodovia_temp_id           BigInt?
+  nome                      String       @db.VarChar(255)
+  descricao                 String?      @db.Text
+  kmInicial                 Decimal      @db.Decimal(10, 3)
+  kmFinal                   Decimal      @db.Decimal(10, 3)
+  kmInicialKML              Decimal?     @db.Decimal(10, 3)
+  kmFinalKML                Decimal?     @db.Decimal(10, 3)
+  inicioTrecho              String?      @db.VarChar(255)
+  fimTrecho                 String?      @db.VarChar(255)
+  geojson_trace             Json?        @map("geojson_trace")
+  geojson_markers           Json?        @map("geojson_markers")
+  peso                      Decimal?     @default(0) @db.Decimal(18, 15)
+  areaTotalM2               Int?
+  faixaAdicionalOuDuplicado Int          @default(0)
+  createdAt                 DateTime     @default(now()) @db.DateTime(0)
+  updatedAt                 DateTime     @default(now()) @updatedAt @db.DateTime(0)
+  
+  rodovia                   RodoviaTemp? @relation(fields: [rodovia_temp_id], references: [id], onDelete: Cascade)
+
+  @@index([rodovia_temp_id], map: "ix_sh_temp_rodovia")
+  @@index([rodovia_temp_id, kmInicial, kmFinal], map: "ix_sh_temp_km")
+  @@map("segmentos_homogeneos_temp")
+}
